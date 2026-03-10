@@ -1,0 +1,34 @@
+name: CCPP NUOPC CI
+
+on:
+  push:
+    branches: [ main, 'feat/**' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gfortran libesmf-dev
+
+    - name: Build and Syntax Check
+      run: |
+        echo "Verifying file existence and structure..."
+        ls -R src/
+
+        echo "Syntax check for internal state..."
+        gfortran -fsyntax-only src/ccpp_internal_state.F90
+
+        # Note: The cap cannot be syntax-checked easily without the ESMF .mod files
+        # in the include path, which libesmf-dev should provide but might need -I.
+        # This is a baseline check for the core logic.
+        echo "CI workflow configured to monitor src/ directory."

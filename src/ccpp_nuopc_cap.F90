@@ -3,10 +3,6 @@ module CCPP_NUOPC_Cap
   use NUOPC
   use, intrinsic :: iso_c_binding
   use ccpp_internal_state_mod
-
-  ! Actual CCPP framework modules (to be used when submodules are present)
-  ! use ccpp_framework, only: ccpp_init, ccpp_run, ccpp_finalize
-
   implicit none
 
   public SetServices
@@ -20,7 +16,6 @@ contains
     rc = ESMF_SUCCESS
 
     ! Register NUOPC specialized methods
-    ! Correct usage: pass the NUOPC_SetServices generic routine
     call NUOPC_CompDerive(gcomp, NUOPC_SetServices, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="NUOPC_CompDerive failed")) return
 
@@ -56,11 +51,11 @@ contains
 
     allocate(state)
 
-    ! Initialize dimensions (example)
+    ! Dimensions (to be initialized from external metadata in production)
     state%ncol = 100_c_int
     state%nlev = 50_c_int
 
-    ! Create a grid with distribution for field allocation
+    ! Grid and distribution creation
     counts = (/ int(state%ncol), int(state%nlev) /)
     state%grid = ESMF_GridCreateRectilinear(maxIndex=counts, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="ESMF_GridCreateRectilinear failed")) then
@@ -76,8 +71,7 @@ contains
     end if
 
     ! Initialize CCPP framework
-    ! call ccpp_init(state%ccpp_state, "my_physics_suite", ccpp_rc)
-    ccpp_rc = 0_c_int ! Mock success
+    call ccpp_init(state%ccpp_state, "my_physics_suite", ccpp_rc)
     if (ccpp_rc /= 0_c_int) then
       rc = ESMF_FAILURE
       call ESMF_LogFoundError(rcToCheck=rc, msg="ccpp_init failed")
@@ -107,6 +101,7 @@ contains
     rc = ESMF_SUCCESS
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
 
+    ! Field creation (realizing advertised fields)
     field = ESMF_FieldCreate(state%grid, typekind=ESMF_TYPEKIND_R8, name="air_temperature", rc=rc)
     call NUOPC_Realize(gcomp, field=field, rc=rc)
 
@@ -140,22 +135,27 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
     call ESMF_GridCompGet(gcomp, importState=importState, exportState=exportState, clock=clock, rc=rc)
 
-    ! 1. Map fields to internal pointers
+    ! Error-checked field retrieval and pointer mapping
     call ESMF_StateGet(importState, "air_temperature", field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg="air_temperature missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%temp, rc=rc)
 
     call ESMF_StateGet(importState, "air_pressure", field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg="air_pressure missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%pres, rc=rc)
 
     call ESMF_StateGet(exportState, "specific_humidity", field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg="specific_humidity missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%q, rc=rc)
 
     call ESMF_StateGet(exportState, "precipitation_rate", field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg="precipitation_rate missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%rain, rc=rc)
 
-    ! 2. Call CCPP Run
-    ! call ccpp_run(state%ccpp_state, "my_physics_suite", state%ncol, state%nlev, ...)
-    ccpp_rc = 0_c_int ! Mock
+    ! Execute CCPP Run
+    call ccpp_run(state%ccpp_state, "my_physics_suite", state%ncol, state%nlev, &
+                  state%temp, state%pres, state%q, state%rain, ccpp_rc)
+
     if (ccpp_rc /= 0_c_int) then
       rc = ESMF_FAILURE
       call ESMF_LogFoundError(rcToCheck=rc, msg="ccpp_run failed")
@@ -174,7 +174,7 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
 
     ! Finalize CCPP
-    ! call ccpp_finalize(state%ccpp_state, ccpp_rc)
+    call ccpp_finalize(state%ccpp_state, ccpp_rc)
 
     ! Clean up ESMF resources
     call ESMF_GridDestroy(state%grid, rc=rc)
