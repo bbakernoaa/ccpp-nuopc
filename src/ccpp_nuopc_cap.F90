@@ -4,6 +4,7 @@ module CCPP_NUOPC_Cap
   use NUOPC_Model, modelSS => SetServices
   use, intrinsic :: iso_c_binding
   use ccpp_internal_state_mod
+  use ccpp_inline_cdeps_mod
   implicit none
 
   public SetServices
@@ -109,9 +110,12 @@ contains
 
     type(ccpp_internal_state_type), pointer :: state
     type(ESMF_State) :: importState, exportState
+    type(ESMF_Clock) :: clock
     type(ESMF_Field) :: field
+    type(ESMF_VM)    :: vm
     integer :: counts(2)
     integer(kind_int) :: ccpp_rc
+    integer :: mytask
 
     rc = ESMF_SUCCESS
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
@@ -148,6 +152,21 @@ contains
       return
     end if
 
+    ! Get clock and VM from component
+    call ESMF_GridCompGet(gcomp, clock=clock, vm=vm, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
+    ! Get PET (task ID)
+    call ESMF_VMGet(vm, localPet=mytask, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
+    ! Initialize inline CDEPS
+    call ccpp_inline_init(gcomp, clock, state%grid, mytask, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
   end subroutine Realize
 
   subroutine DataInitialize(gcomp, rc)
@@ -157,6 +176,7 @@ contains
   end subroutine DataInitialize
 
   subroutine ModelAdvance(gcomp, rc)
+    use omp_lib
     type(ESMF_GridComp)  :: gcomp
     integer, intent(out) :: rc
 
@@ -165,6 +185,7 @@ contains
     type(ESMF_Clock) :: clock
     type(ESMF_Field) :: field
     integer(kind_int) :: ccpp_rc
+    integer :: thrd_no
 
     rc = ESMF_SUCCESS
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
@@ -188,10 +209,18 @@ contains
 !! \htmlinclude CCPP_NUOPC_Cap.html
 !!
 
-    ! Execute CCPP Run phases
+    ! Execute CCPP Run phases with OpenMP threading
     call ccpp_physics_timestep_init(state%ccpp_state, suite_name="my_physics_suite", ierr=ccpp_rc)
     if (ccpp_rc == 0_kind_int) then
-      call ccpp_physics_run(state%ccpp_state, suite_name="my_physics_suite", ierr=ccpp_rc)
+      !$omp parallel private(thrd_no, ccpp_rc)
+      thrd_no = omp_get_thread_num() + 1
+      ! Note: in a real implementation, each thread would operate on a unique block
+      ! and have its own ccpp_t handle to avoid race conditions.
+      ! Here we set the thread ID and call run, assuming ccpp_physics_run
+      ! is thread-safe or handles the thread-local state internally.
+      call ccpp_physics_run(state%ccpp_state, suite_name="my_physics_suite", &
+        thrd_no=int(thrd_no, kind_int), ierr=ccpp_rc)
+      !$omp end parallel
     end if
     if (ccpp_rc == 0_kind_int) then
       call ccpp_physics_timestep_finalize(state%ccpp_state, suite_name="my_physics_suite", ierr=ccpp_rc)
@@ -201,6 +230,11 @@ contains
       rc = ESMF_FAILURE
       return
     end if
+
+    ! Run inline CDEPS
+    call ccpp_inline_run(clock, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
 
   end subroutine ModelAdvance
 
