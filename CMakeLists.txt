@@ -50,6 +50,7 @@ if(NOT CDEPS_FOUND)
         GIT_REPOSITORY https://github.com/bbakernoaa/CDEPS.git
         GIT_TAG        ae5d2c457321ebae3a0d9c9c949f871bb8f2b09c
         GIT_SUBMODULES_RECURSIVE ON
+        UPDATE_COMMAND ""
         PATCH_COMMAND bash -c " \
             sed -i 's/add_subdirectory(fox)/#add_subdirectory(fox)/' CMakeLists.txt; \
             find . -name CMakeLists.txt -exec sed -i 's/install(/#install(/g' {} +; \
@@ -85,11 +86,20 @@ add_library(ccpp_nuopc_cap src/ccpp_nuopc_cap.F90 src/ccpp_inline_cdeps_mod.F90)
 target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_internal_state ESMF::ESMF cdeps OpenMP::OpenMP_Fortran)
 
 # Prepare for CCPP submodules
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/CMakeLists.txt")
-    add_subdirectory(src/ccpp-framework)
-    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_framework)
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/CMakeLists.txt")
+    message(STATUS "Downloading CCPP Framework...")
+    execute_process(COMMAND git clone https://github.com/Bbakernoaa/ccpp-framework.git src/ccpp-framework
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-physics/CMakeLists.txt")
-    add_subdirectory(src/ccpp-physics)
-    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_physics)
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-physics/CMakeLists.txt")
+    message(STATUS "Downloading CCPP Physics...")
+    execute_process(COMMAND git clone https://github.com/Bbakernoaa/ccpp-physics.git src/ccpp-physics
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
+
+add_subdirectory(src/ccpp-framework)
+target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_framework)
+
+add_subdirectory(src/ccpp-physics)
+target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_physics)
