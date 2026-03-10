@@ -50,7 +50,7 @@ jobs:
         fi
 
         # Leverage ESMFMKFILE to find PIO_ROOT if available
-        ESMFMKFILE=$(find /opt -name "esmf.mk" | head -n 1)
+        ESMFMKFILE=$(find /opt/software -name "esmf.mk" | head -n 1)
         if [ -f "$ESMFMKFILE" ]; then
           echo "Found ESMFMKFILE: $ESMFMKFILE"
           PIO_INCLUDE=$(grep "ESMF_PIO_INCLUDE" "$ESMFMKFILE" | cut -d'=' -f2 | xargs echo)

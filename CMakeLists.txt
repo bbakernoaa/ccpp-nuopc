@@ -19,6 +19,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(cdeps)
 
+# Add CDEPS cmake directory to module path for finding PIO
+list(APPEND CMAKE_MODULE_PATH "${cdeps_SOURCE_DIR}/cmake")
+
 # Add internal state library
 add_library(ccpp_internal_state src/ccpp_internal_state.F90)
 target_link_libraries(ccpp_internal_state PUBLIC ESMF::ESMF)
