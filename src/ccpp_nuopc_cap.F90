@@ -82,6 +82,7 @@ contains
     integer, intent(out) :: rc
     rc = ESMF_SUCCESS
 
+    ! Correct constants are ESMF_STATEKIND_IMPORT and ESMF_STATEKIND_EXPORT
     call NUOPC_Advertise(gcomp, StandardName="air_temperature", StateKind=ESMF_STATEKIND_IMPORT, rc=rc)
     call NUOPC_Advertise(gcomp, StandardName="air_pressure", StateKind=ESMF_STATEKIND_IMPORT, rc=rc)
     call NUOPC_Advertise(gcomp, StandardName="specific_humidity", StateKind=ESMF_STATEKIND_EXPORT, rc=rc)
@@ -99,16 +100,16 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
 
     field = ESMF_FieldCreate(state%grid, typekind=ESMF_TYPEKIND_R8, name="air_temperature", rc=rc)
-    call NUOPC_Realize(gcomp, "air_temperature", field=field, rc=rc)
+    call NUOPC_Realize(gcomp, field=field, rc=rc)
 
     field = ESMF_FieldCreate(state%grid, typekind=ESMF_TYPEKIND_R8, name="air_pressure", rc=rc)
-    call NUOPC_Realize(gcomp, "air_pressure", field=field, rc=rc)
+    call NUOPC_Realize(gcomp, field=field, rc=rc)
 
     field = ESMF_FieldCreate(state%grid, typekind=ESMF_TYPEKIND_R8, name="specific_humidity", rc=rc)
-    call NUOPC_Realize(gcomp, "specific_humidity", field=field, rc=rc)
+    call NUOPC_Realize(gcomp, field=field, rc=rc)
 
     field = ESMF_FieldCreate(state%grid, typekind=ESMF_TYPEKIND_R8, name="precipitation_rate", rc=rc)
-    call NUOPC_Realize(gcomp, "precipitation_rate", field=field, rc=rc)
+    call NUOPC_Realize(gcomp, field=field, rc=rc)
   end subroutine Realize
 
   subroutine DataInitialize(gcomp, rc)
@@ -132,6 +133,10 @@ contains
     call ESMF_GridCompGet(gcomp, importState=importState, exportState=exportState, clock=clock, rc=rc)
 
     ! 1. PRE-RUN: Map fields and Register with CCPP
+    ! Register dimensions
+    call ccpp_field_add(state%ccpp_state, "horizontal_loop_extent", state%ncol, ccpp_rc)
+    call ccpp_field_add(state%ccpp_state, "vertical_dimension", state%nlev, ccpp_rc)
+
     call ESMF_StateGet(importState, "air_temperature", field, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="air_temperature missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%temp, rc=rc)
