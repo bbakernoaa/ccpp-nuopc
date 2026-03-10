@@ -24,6 +24,7 @@ jobs:
         fi
 
         if command -v spack &> /dev/null; then
+          spack install cdeps || true
           spack load esmf ccpp-framework parallelio netcdf-c netcdf-fortran cdeps || true
         fi
 

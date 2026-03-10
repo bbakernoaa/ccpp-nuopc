@@ -21,6 +21,7 @@ if(NOT cdeps_FOUND)
         GIT_REPOSITORY https://github.com/NOAA-EMC/CDEPS
         GIT_TAG        cdeps0.4.17
         GIT_SUBMODULES_RECURSIVE ON
+        UPDATE_COMMAND ""
     )
     FetchContent_GetProperties(cdeps)
     if(NOT cdeps_POPULATED)
