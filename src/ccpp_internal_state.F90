@@ -1,15 +1,17 @@
 module ccpp_internal_state_mod
   use ESMF
   use, intrinsic :: iso_c_binding
-  ! In a real integration, we would use the actual CCPP modules:
+  ! In a real system, these would be the actual CCPP modules:
   ! use ccpp_types, only: ccpp_t
-  ! use ccpp_framework, only: ccpp_init, ccpp_run, ccpp_finalize
+  ! use ccpp_framework, only: ccpp_init, ccpp_run, ccpp_finalize, ccpp_field_add
   implicit none
 
-  ! Placeholder for ccpp_t if the library is not yet compiled/linked
+  ! Preprocessor-guarded mock for standalone development/CI
+#ifndef USE_REAL_CCPP
   type ccpp_t
      integer(c_int) :: dummy
   end type ccpp_t
+#endif
 
   type ccpp_internal_state_type
     ! ESMF-related
@@ -32,6 +34,7 @@ module ccpp_internal_state_mod
 
   end type ccpp_internal_state_type
 
+#ifndef USE_REAL_CCPP
   interface
     subroutine ccpp_init(ccpp_state, suite, rc)
       import :: ccpp_t, c_int
@@ -40,13 +43,19 @@ module ccpp_internal_state_mod
       integer(c_int), intent(out) :: rc
     end subroutine ccpp_init
 
-    subroutine ccpp_run(ccpp_state, suite, ncol, nlev, temp, pres, q, rain, rc)
+    ! Realistic mock for field registration
+    subroutine ccpp_field_add(ccpp_state, name, var, rc)
       import :: ccpp_t, c_int, c_double
+      type(ccpp_t),  intent(inout) :: ccpp_state
+      character(*),  intent(in)    :: name
+      real(c_double), pointer      :: var(:,:)
+      integer(c_int), intent(out)  :: rc
+    end subroutine ccpp_field_add
+
+    subroutine ccpp_run(ccpp_state, suite, rc)
+      import :: ccpp_t, c_int
       type(ccpp_t), intent(inout) :: ccpp_state
       character(*), intent(in)    :: suite
-      integer(c_int), intent(in)  :: ncol, nlev
-      real(c_double), intent(in)  :: temp(ncol, nlev), pres(ncol, nlev)
-      real(c_double), intent(out) :: q(ncol, nlev), rain(ncol, nlev)
       integer(c_int), intent(out) :: rc
     end subroutine ccpp_run
 
@@ -56,5 +65,6 @@ module ccpp_internal_state_mod
       integer(c_int), intent(out)   :: rc
     end subroutine ccpp_finalize
   end interface
+#endif
 
 end module ccpp_internal_state_mod

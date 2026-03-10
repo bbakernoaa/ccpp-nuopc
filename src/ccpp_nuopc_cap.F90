@@ -15,7 +15,6 @@ contains
 
     rc = ESMF_SUCCESS
 
-    ! Register NUOPC specialized methods
     call NUOPC_CompDerive(gcomp, NUOPC_SetServices, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="NUOPC_CompDerive failed")) return
 
@@ -51,11 +50,9 @@ contains
 
     allocate(state)
 
-    ! Dimensions (to be initialized from external metadata in production)
     state%ncol = 100_c_int
     state%nlev = 50_c_int
 
-    ! Grid and distribution creation
     counts = (/ int(state%ncol), int(state%nlev) /)
     state%grid = ESMF_GridCreateRectilinear(maxIndex=counts, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="ESMF_GridCreateRectilinear failed")) then
@@ -101,7 +98,6 @@ contains
     rc = ESMF_SUCCESS
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
 
-    ! Field creation (realizing advertised fields)
     field = ESMF_FieldCreate(state%grid, typekind=ESMF_TYPEKIND_R8, name="air_temperature", rc=rc)
     call NUOPC_Realize(gcomp, field=field, rc=rc)
 
@@ -135,26 +131,29 @@ contains
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
     call ESMF_GridCompGet(gcomp, importState=importState, exportState=exportState, clock=clock, rc=rc)
 
-    ! Error-checked field retrieval and pointer mapping
+    ! 1. PRE-RUN: Map fields and Register with CCPP
     call ESMF_StateGet(importState, "air_temperature", field, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="air_temperature missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%temp, rc=rc)
+    call ccpp_field_add(state%ccpp_state, "air_temperature", state%temp, ccpp_rc)
 
     call ESMF_StateGet(importState, "air_pressure", field, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="air_pressure missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%pres, rc=rc)
+    call ccpp_field_add(state%ccpp_state, "air_pressure", state%pres, ccpp_rc)
 
     call ESMF_StateGet(exportState, "specific_humidity", field, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="specific_humidity missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%q, rc=rc)
+    call ccpp_field_add(state%ccpp_state, "specific_humidity", state%q, ccpp_rc)
 
     call ESMF_StateGet(exportState, "precipitation_rate", field, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg="precipitation_rate missing")) return
     call ESMF_FieldGet(field, farrayPtr=state%rain, rc=rc)
+    call ccpp_field_add(state%ccpp_state, "precipitation_rate", state%rain, ccpp_rc)
 
-    ! Execute CCPP Run
-    call ccpp_run(state%ccpp_state, "my_physics_suite", state%ncol, state%nlev, &
-                  state%temp, state%pres, state%q, state%rain, ccpp_rc)
+    ! 2. Execute CCPP Run
+    call ccpp_run(state%ccpp_state, "my_physics_suite", ccpp_rc)
 
     if (ccpp_rc /= 0_c_int) then
       rc = ESMF_FAILURE
@@ -173,10 +172,7 @@ contains
     rc = ESMF_SUCCESS
     call ESMF_GridCompGetInternalState(gcomp, state, rc=rc)
 
-    ! Finalize CCPP
     call ccpp_finalize(state%ccpp_state, ccpp_rc)
-
-    ! Clean up ESMF resources
     call ESMF_GridDestroy(state%grid, rc=rc)
     deallocate(state)
   end subroutine Finalize
