@@ -40,8 +40,8 @@ jobs:
         echo "Configuring and Building with CMake..."
         mkdir build
         cd build
-        # Pass CMAKE_PREFIX_PATH explicitly and enable verbose output
+        # Pass CMAKE_PREFIX_PATH and enable verbose output
         cmake .. -DCMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH
         make VERBOSE=1
 
-        echo "CI build and syntax check complete via CMake."
+        echo "CI build complete via CMake."

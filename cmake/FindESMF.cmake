@@ -16,11 +16,14 @@ if(NOT TARGET ESMF::ESMF)
     if(ESMFMKFILE AND EXISTS ${ESMFMKFILE})
         message(STATUS "Found ESMFMKFILE: ${ESMFMKFILE}")
 
-        # Helper macro to parse esmf.mk
+        # Helper macro to parse esmf.mk more robustly
         macro(parse_esmf_mk VARNAME)
-            file(STRINGS ${ESMFMKFILE} _line REGEX "^${VARNAME} = ")
+            file(STRINGS "${ESMFMKFILE}" _line REGEX "^[ \t]*${VARNAME}[ \t]*=")
             if(_line)
-                string(REPLACE "${VARNAME} = " "" _val "${_line}")
+                # Take the last match if there are multiple
+                list(GET _line -1 _line_val)
+                # Remove the variable name and equals sign
+                string(REGEX REPLACE "^[ \t]*${VARNAME}[ \t]*=[ \t]*" "" _val "${_line_val}")
                 string(STRIP "${_val}" ${VARNAME})
                 message(STATUS "Parsed from ${ESMFMKFILE}: ${VARNAME} = ${${VARNAME}}")
             endif()
@@ -28,13 +31,12 @@ if(NOT TARGET ESMF::ESMF)
 
         parse_esmf_mk(ESMF_F90COMPILEPATHS)
         parse_esmf_mk(ESMF_F90LINKPATHS)
-        parse_esmf_mk(ESMF_F90LINKRPATHS)
         parse_esmf_mk(ESMF_F90ESMFLINKLIBS)
 
         # Convert compile paths (-I/path) to include directories (/path)
-        # Handle multiple paths separated by spaces
         set(_inc_dirs "")
         if(ESMF_F90COMPILEPATHS)
+            # Replace "-I" with ";" to create a list, but handle it carefully
             string(REPLACE "-I" ";" _raw_inc_list "${ESMF_F90COMPILEPATHS}")
             foreach(_dir IN LISTS _raw_inc_list)
                 string(STRIP "${_dir}" _dir)
@@ -59,11 +61,17 @@ if(NOT TARGET ESMF::ESMF)
         # Extract library names (-lesmf)
         set(_libs "")
         if(ESMF_F90ESMFLINKLIBS)
-            string(REPLACE "-l" ";" _raw_lib_list "${ESMF_F90ESMFLINKLIBS}")
+            # Some entries might be full paths or -l names
+            string(REGEX REPLACE "[ \t]+" ";" _raw_lib_list "${ESMF_F90ESMFLINKLIBS}")
             foreach(_lib IN LISTS _raw_lib_list)
                 string(STRIP "${_lib}" _lib)
                 if(_lib)
-                    list(APPEND _libs "${_lib}")
+                    if(_lib MATCHES "^-l")
+                        string(REGEX REPLACE "^-l" "" _lib_name "${_lib}")
+                        list(APPEND _libs "${_lib_name}")
+                    else()
+                        list(APPEND _libs "${_lib}")
+                    endif()
                 endif()
             endforeach()
         endif()
@@ -75,7 +83,7 @@ if(NOT TARGET ESMF::ESMF)
             INTERFACE_LINK_LIBRARIES "${_libs}"
         )
 
-        message(STATUS "ESMF include directories: ${_inc_dirs}")
+        message(STATUS "ESMF processed include directories: ${_inc_dirs}")
 
         set(ESMF_FOUND TRUE)
     else()
