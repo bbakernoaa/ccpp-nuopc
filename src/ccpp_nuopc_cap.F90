@@ -54,14 +54,42 @@ contains
 
     type(ESMF_State) :: importState, exportState
     type(ccpp_internal_state_type), pointer :: state
+    type(ESMF_Config) :: config
 
     rc = ESMF_SUCCESS
 
     ! Allocate and set internal state
     allocate(state)
-    state%ncol = 100_kind_int
-    state%nlev = 50_kind_int
-    state%ncol_all = 100_kind_int
+
+    ! Retrieve dimensions from ESMF gridded component configuration
+    call ESMF_GridCompGet(gcomp, config=config, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
+    call ESMF_ConfigGetAttribute(config, value=state%ncol, label="ncol", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
+    call ESMF_ConfigGetAttribute(config, value=state%nlev, label="nlev", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
+    call ESMF_ConfigGetAttribute(config, value=state%ncol_all, label="ncol_all", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
     call ESMF_GridCompSetInternalState(gcomp, state, rc=rc)
 
     call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
