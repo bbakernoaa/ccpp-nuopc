@@ -35,52 +35,15 @@ module ccpp_internal_state_mod
   end type ccpp_internal_state_type
 
 #ifndef USE_REAL_CCPP
-  interface
-    subroutine ccpp_init(ccpp_state, suite, rc)
-      import :: ccpp_t, c_int
-      type(ccpp_t), intent(inout) :: ccpp_state
-      character(*), intent(in)    :: suite
-      integer(c_int), intent(out) :: rc
-    end subroutine ccpp_init
-
-    ! Generic interface for mock to handle different ranks
-    subroutine ccpp_field_add_2d(ccpp_state, name, var, rc)
-      import :: ccpp_t, c_int, c_double
-      type(ccpp_t),  intent(inout) :: ccpp_state
-      character(*),  intent(in)    :: name
-      real(c_double), pointer      :: var(:,:)
-      integer(c_int), intent(out)  :: rc
-    end subroutine ccpp_field_add_2d
-
-    subroutine ccpp_field_add_scalar(ccpp_state, name, var, rc)
-      import :: ccpp_t, c_int, c_double
-      type(ccpp_t),  intent(inout) :: ccpp_state
-      character(*),  intent(in)    :: name
-      integer(c_int), intent(in)   :: var
-      integer(c_int), intent(out)  :: rc
-    end subroutine ccpp_field_add_scalar
-
-    subroutine ccpp_run(ccpp_state, suite, rc)
-      import :: ccpp_t, c_int
-      type(ccpp_t), intent(inout) :: ccpp_state
-      character(*), intent(in)    :: suite
-      integer(c_int), intent(out) :: rc
-    end subroutine ccpp_run
-
-    subroutine ccpp_finalize(ccpp_state, rc)
-      import :: ccpp_t, c_int
-      type(ccpp_t), intent(inout) :: ccpp_state
-      integer(c_int), intent(out)   :: rc
-    end subroutine ccpp_finalize
-  end interface
-
+  ! Generic interface for mock to handle different ranks
   interface ccpp_field_add
      module procedure ccpp_field_add_2d
      module procedure ccpp_field_add_scalar
   end interface
 
 contains
-  ! Implement mocks to avoid linker errors
+  ! Implement mocks to avoid linker errors.
+  ! These provide the implicit interfaces needed for the module procedures.
   subroutine ccpp_init(ccpp_state, suite, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
     character(*), intent(in)    :: suite
