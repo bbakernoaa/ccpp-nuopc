@@ -30,15 +30,14 @@ jobs:
           spack load ccpp-framework || true
         fi
 
-        # The JCSDA container sets up ESMFMKFILE when the environment is active.
-        # We can extract the include paths from this file.
-        if [ -f "$ESMFMKFILE" ]; then
+        # Extract include paths from ESMFMKFILE (esmf.mk)
+        if [ -n "$ESMFMKFILE" ] && [ -f "$ESMFMKFILE" ]; then
           echo "ESMFMKFILE found at: $ESMFMKFILE"
           # Extract the ESMF_F90COMPILEPATHS line and take its value
-          ESMF_INC=$(grep 'ESMF_F90COMPILEPATHS =' $ESMFMKFILE | sed 's/ESMF_F90COMPILEPATHS = //')
+          ESMF_INC=$(grep "^ESMF_F90COMPILEPATHS =" "$ESMFMKFILE" | cut -d'=' -f2- | xargs)
           echo "ESMF include paths from ESMFMKFILE: $ESMF_INC"
         else
-          echo "ESMFMKFILE not found, attempting fallback to Spack location."
+          echo "ESMFMKFILE not set or not found, attempting fallback to Spack location."
           ESMF_PATH=$(spack location -i esmf)
           ESMF_INC="-I$(find $ESMF_PATH -name "esmf.mod" -printf '%h\n' | head -n 1)"
         fi
@@ -51,7 +50,8 @@ jobs:
 
         echo "Syntax check for NUOPC cap..."
         # We need the module from ccpp_internal_state.F90, so we compile it first.
+        # Ensure the current directory is in the include path for the generated .mod file.
         gfortran -c $ESMF_INC src/ccpp_internal_state.F90
-        gfortran -fsyntax-only $ESMF_INC src/ccpp_nuopc_cap.F90
+        gfortran -fsyntax-only $ESMF_INC -I. src/ccpp_nuopc_cap.F90
 
-        echo "CI workflow configured to use ESMFMKFILE from the JCSDA environment."
+        echo "CI workflow configured to use ESMFMKFILE with improved include extraction."
