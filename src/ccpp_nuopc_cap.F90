@@ -4,6 +4,7 @@ module CCPP_NUOPC_Cap
   use NUOPC_Model, modelSS => SetServices
   use, intrinsic :: iso_c_binding
   use ccpp_internal_state_mod
+  use ccpp_inline_cdeps_mod
   implicit none
 
   public SetServices
@@ -54,14 +55,42 @@ contains
 
     type(ESMF_State) :: importState, exportState
     type(ccpp_internal_state_type), pointer :: state
+    type(ESMF_Config) :: config
 
     rc = ESMF_SUCCESS
 
     ! Allocate and set internal state
     allocate(state)
-    state%ncol = 100_kind_int
-    state%nlev = 50_kind_int
-    state%ncol_all = 100_kind_int
+
+    ! Retrieve dimensions from ESMF gridded component configuration
+    call ESMF_GridCompGet(gcomp, config=config, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
+    call ESMF_ConfigGetAttribute(config, value=state%ncol, label="ncol", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
+    call ESMF_ConfigGetAttribute(config, value=state%nlev, label="nlev", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
+    call ESMF_ConfigGetAttribute(config, value=state%ncol_all, label="ncol_all", rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) then
+      deallocate(state)
+      return
+    end if
+
     call ESMF_GridCompSetInternalState(gcomp, state, rc=rc)
 
     call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
@@ -82,6 +111,9 @@ contains
     type(ccpp_internal_state_type), pointer :: state
     type(ESMF_State) :: importState, exportState
     type(ESMF_Field) :: field
+    type(ESMF_Clock) :: clock
+    type(ESMF_VM)    :: vm
+    integer :: mytask
     integer :: counts(2)
     integer(kind_int) :: ccpp_rc
 
@@ -113,12 +145,32 @@ contains
     ! Initialize CCPP framework
     call ccpp_init(state%ccpp_state, "my_physics_suite", ccpp_rc)
 
+    ! Create mesh for CDEPS integration
+    state%mesh = ESMF_MeshCreate(parametricDim=1, spatialDim=1, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
     ! Initialize CCPP physics
     call ccpp_physics_init(state%ccpp_state, suite_name="my_physics_suite", ierr=ccpp_rc)
     if (ccpp_rc /= 0_kind_int) then
       rc = ESMF_FAILURE
       return
     end if
+
+    ! Get clock and VM from component
+    call ESMF_GridCompGet(gcomp, clock=clock, vm=vm, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
+    ! Get PET (task ID)
+    call ESMF_VMGet(vm, localPet=mytask, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
+    ! Initialize inline CDEPS
+    call ccpp_inline_init(gcomp, clock, state%mesh, mytask, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
 
   end subroutine Realize
 
@@ -174,6 +226,11 @@ contains
       return
     end if
 
+    ! Run inline CDEPS
+    call ccpp_inline_run(clock, rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
   end subroutine ModelAdvance
 
   subroutine Finalize(gcomp, rc)
@@ -190,6 +247,7 @@ contains
     call ccpp_physics_finalize(state%ccpp_state, suite_name="my_physics_suite", ierr=ccpp_rc)
     call ccpp_finalize(state%ccpp_state, ccpp_rc)
     call ESMF_GridDestroy(state%grid, rc=rc)
+    call ESMF_MeshDestroy(state%mesh, rc=rc)
     deallocate(state)
   end subroutine Finalize
 
