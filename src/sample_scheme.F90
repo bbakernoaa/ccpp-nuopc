@@ -1,5 +1,6 @@
 module sample_scheme
   use, intrinsic :: iso_c_binding
+  use ccpp_internal_state_mod, only: kind_phys
   implicit none
   private
   public :: sample_scheme_init
@@ -20,10 +21,10 @@ contains
 !! \htmlinclude sample_scheme_run.html
 !!
     integer,          intent(in)    :: ncol, nlev
-    real(c_double),   intent(inout) :: temp(ncol, nlev)
-    real(c_double),   intent(in)    :: pres(ncol, nlev)
-    real(c_double),   intent(inout) :: q(ncol, nlev)
-    real(c_double),   intent(out)   :: rain(ncol, nlev)
+    real(kind_phys),   intent(inout) :: temp(ncol, nlev)
+    real(kind_phys),   intent(in)    :: pres(ncol, nlev)
+    real(kind_phys),   intent(inout) :: q(ncol, nlev)
+    real(kind_phys),   intent(out)   :: rain(ncol, nlev)
     character(len=*), intent(out)   :: errmsg
     integer,          intent(out)   :: errflg
 
@@ -35,10 +36,10 @@ contains
     do k = 1, nlev
        do i = 1, ncol
           ! Simple dummy physics: increase temperature slightly
-          temp(i,k) = temp(i,k) + 0.01_c_double
+          temp(i,k) = temp(i,k) + 0.01_kind_phys
           ! Simple condensation: q decreases, rain increases
-          rain(i,k) = q(i,k) * 0.1_c_double
-          q(i,k) = q(i,k) * 0.9_c_double
+          rain(i,k) = q(i,k) * 0.1_kind_phys
+          q(i,k) = q(i,k) * 0.9_kind_phys
        end do
     end do
 

@@ -1,5 +1,7 @@
 module ccpp_internal_state_mod
+#ifdef USE_REAL_CCPP
   use ESMF
+#endif
   use, intrinsic :: iso_c_binding
 #ifdef USE_REAL_CCPP
   use ccpp_types, only: ccpp_t
@@ -9,11 +11,11 @@ module ccpp_internal_state_mod
 
   public :: ccpp_internal_state_type
   public :: kind_phys, kind_int
-  public :: ccpp_init, ccpp_physics_init, ccpp_physics_timestep_init, &
-            ccpp_physics_run, ccpp_physics_timestep_finalize, &
-            ccpp_physics_finalize, ccpp_finalize, ccpp_field_add
-  public :: kind_phys, kind_int ! Ensure these are always public
+  public :: ccpp_init, ccpp_finalize, ccpp_field_add
 #ifndef USE_REAL_CCPP
+  public :: ccpp_physics_init, ccpp_physics_timestep_init, &
+            ccpp_physics_run, ccpp_physics_timestep_finalize, &
+            ccpp_physics_finalize
   public :: ccpp_t
 #endif
 
@@ -34,8 +36,10 @@ module ccpp_internal_state_mod
 
   type ccpp_internal_state_type
     ! ESMF-related
+#ifdef USE_REAL_CCPP
     type(ESMF_Grid) :: grid
     type(ESMF_Mesh) :: mesh
+#endif
 
     ! Data arrays (pointers to ESMF field memory)
     real(kind_phys), pointer :: temp(:,:) => null()
@@ -70,15 +74,14 @@ contains
     rc = 0_kind_int
   end subroutine ccpp_init
 
+#ifndef USE_REAL_CCPP
   subroutine ccpp_physics_init(ccpp_state, suite_name, group_name, ierr)
     type(ccpp_t), intent(inout) :: ccpp_state
     character(*), intent(in)    :: suite_name
     character(*), intent(in), optional :: group_name
     integer(kind_int), intent(out) :: ierr
-#ifndef USE_REAL_CCPP
     ccpp_state%errflg = 0_kind_int
     ccpp_state%errmsg = ""
-#endif
     ierr = 0_kind_int
   end subroutine ccpp_physics_init
 
@@ -113,16 +116,12 @@ contains
     integer(kind_int), intent(out) :: ierr
     ierr = 0_kind_int
   end subroutine ccpp_physics_finalize
+#endif
 
   subroutine ccpp_finalize(ccpp_state, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
     integer(kind_int), intent(out) :: rc
-#ifndef USE_REAL_CCPP
     rc = 0_kind_int
-#else
-    ! In real CCPP, ccpp_t doesn't have a simple finalize routine in ccpp_types
-    rc = 0_kind_int
-#endif
   end subroutine ccpp_finalize
 
   subroutine ccpp_field_add(ccpp_state, name, var, rc)

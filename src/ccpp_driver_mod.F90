@@ -1,6 +1,8 @@
 module ccpp_driver_mod
+#ifdef USE_REAL_CCPP
   use ESMF
   use NUOPC
+#endif
   use, intrinsic :: iso_c_binding
   use ccpp_internal_state_mod
   use ccpp_data_mod
@@ -17,17 +19,23 @@ module ccpp_driver_mod
 contains
 
   subroutine ccpp_driver_init(gcomp, suite_name, rc)
+#ifdef USE_REAL_CCPP
     type(ESMF_GridComp), intent(inout) :: gcomp
+#else
+    integer, intent(inout)             :: gcomp
+#endif
     character(*), intent(in)           :: suite_name
     integer, intent(out)               :: rc
 
     type(ccpp_internal_state_type), pointer :: istate
     integer(kind_int) :: ierr
 
-    rc = ESMF_SUCCESS
+    rc = 0
+#ifdef USE_REAL_CCPP
     call ESMF_GridCompGetInternalState(gcomp, istate, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, file=__FILE__)) return
+#endif
 
     ! Set module-level pointer
     state => istate
@@ -36,35 +44,53 @@ contains
     ! Initialize CCPP handle and suite
     call ccpp_init(cdata, suite_name, ierr)
     if (ierr /= 0_kind_int) then
+#ifdef USE_REAL_CCPP
        rc = ESMF_FAILURE
+#else
+       rc = 1
+#endif
        return
     end if
 
     ! Initialize physics schemes for the suite
     call ccpp_physics_init(cdata, suite_name=suite_name, ierr=ierr)
     if (ierr /= 0_kind_int) then
+#ifdef USE_REAL_CCPP
        rc = ESMF_FAILURE
+#else
+       rc = 1
+#endif
        return
     end if
 
   end subroutine ccpp_driver_init
 
   subroutine ccpp_driver_run(gcomp, importState, exportState, suite_name, group_name, rc)
+#ifdef USE_REAL_CCPP
     type(ESMF_GridComp), intent(inout) :: gcomp
     type(ESMF_State), intent(in)       :: importState
     type(ESMF_State), intent(inout)    :: exportState
+#else
+    integer, intent(inout)             :: gcomp
+    integer, intent(in)                :: importState
+    integer, intent(inout)             :: exportState
+#endif
     character(*), intent(in)           :: suite_name
     character(*), intent(in)           :: group_name
     integer, intent(out)               :: rc
 
     type(ccpp_internal_state_type), pointer :: istate
+#ifdef USE_REAL_CCPP
     type(ESMF_Field) :: field
+#endif
     integer(kind_int) :: ierr
 
-    rc = ESMF_SUCCESS
+    rc = 0
+#ifdef USE_REAL_CCPP
     call ESMF_GridCompGetInternalState(gcomp, istate, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, file=__FILE__)) return
+#endif
 
     ! Set module-level pointer for the framework to access via 'state%var'
     state => istate
@@ -73,6 +99,7 @@ contains
     ! Unified interface: Ingest ESMF importState AND exportState fields
     ! MANDATORY: All pointers must be mapped BEFORE physics run
 
+#ifdef USE_REAL_CCPP
     ! Import fields
     call ESMF_StateGet(importState, "air_temperature", field, rc=rc)
     if (rc == ESMF_SUCCESS) call ESMF_FieldGet(field, farrayPtr=state%temp, rc=rc)
@@ -86,6 +113,7 @@ contains
 
     call ESMF_StateGet(exportState, "precipitation_rate", field, rc=rc)
     if (rc == ESMF_SUCCESS) call ESMF_FieldGet(field, farrayPtr=state%rain, rc=rc)
+#endif
 
     ! Execute CCPP via the static API
     call ccpp_physics_timestep_init(cdata, suite_name=suite_name, group_name=group_name, ierr=ierr)
@@ -97,24 +125,34 @@ contains
     end if
 
     if (ierr /= 0_kind_int) then
+#ifdef USE_REAL_CCPP
        rc = ESMF_FAILURE
+#else
+       rc = 1
+#endif
        return
     end if
 
   end subroutine ccpp_driver_run
 
   subroutine ccpp_driver_finalize(gcomp, suite_name, rc)
+#ifdef USE_REAL_CCPP
     type(ESMF_GridComp), intent(inout) :: gcomp
+#else
+    integer, intent(inout)             :: gcomp
+#endif
     character(*), intent(in)           :: suite_name
     integer, intent(out)               :: rc
 
     type(ccpp_internal_state_type), pointer :: istate
     integer(kind_int) :: ierr
 
-    rc = ESMF_SUCCESS
+    rc = 0
+#ifdef USE_REAL_CCPP
     call ESMF_GridCompGetInternalState(gcomp, istate, rc=rc)
     if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
       line=__LINE__, file=__FILE__)) return
+#endif
 
     state => istate
     cdata => state%ccpp_state
