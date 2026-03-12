@@ -87,7 +87,7 @@ file(MAKE_DIRECTORY ${CCPP_BUILDDIR})
 execute_process(
     COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/scripts/ccpp_prebuild.py
             --config ${CMAKE_CURRENT_SOURCE_DIR}/ccpp_prebuild_config.py
-            --suites my_physics_suite
+                --suites my_physics_suite
             --builddir ${CCPP_BUILDDIR}
     RESULT_VARIABLE CCPP_PREBUILD_RESULT
 )
