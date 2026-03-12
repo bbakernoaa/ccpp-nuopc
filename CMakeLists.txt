@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 project(ccpp-nuopc LANGUAGES Fortran)
 
+# Ensure all targets are built with Position Independent Code for shared library compatibility
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Add cmake directory to module path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
