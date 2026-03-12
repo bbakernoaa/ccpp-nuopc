@@ -6,7 +6,6 @@ module ccpp_driver_mod
   use ccpp_data_mod
 #ifdef USE_REAL_CCPP
   use ccpp_static_api
-  use ccpp_types, only: ccpp_init, ccpp_finalize
 #endif
   implicit none
 

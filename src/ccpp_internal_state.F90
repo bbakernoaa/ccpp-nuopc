@@ -9,11 +9,12 @@ module ccpp_internal_state_mod
 
   public :: ccpp_internal_state_type
   public :: kind_phys, kind_int
-#ifndef USE_REAL_CCPP
-  public :: ccpp_t
   public :: ccpp_init, ccpp_physics_init, ccpp_physics_timestep_init, &
             ccpp_physics_run, ccpp_physics_timestep_finalize, &
             ccpp_physics_finalize, ccpp_finalize, ccpp_field_add
+  public :: kind_phys, kind_int ! Ensure these are always public
+#ifndef USE_REAL_CCPP
+  public :: ccpp_t
 #endif
 
   ! Kind parameters for CCPP consistency
@@ -53,18 +54,19 @@ module ccpp_internal_state_mod
 
   end type ccpp_internal_state_type
 
-#ifndef USE_REAL_CCPP
 contains
   subroutine ccpp_init(ccpp_state, suite, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
     character(*), intent(in)    :: suite
     integer(kind_int), intent(out) :: rc
+#ifndef USE_REAL_CCPP
     ccpp_state%errflg = 0_kind_int
     ccpp_state%errmsg = ""
     ccpp_state%blk_no = 1_kind_int
     ccpp_state%thrd_no = 1_kind_int
     ccpp_state%loop_cnt = 1_kind_int
     ccpp_state%loop_max = 1_kind_int
+#endif
     rc = 0_kind_int
   end subroutine ccpp_init
 
@@ -73,8 +75,10 @@ contains
     character(*), intent(in)    :: suite_name
     character(*), intent(in), optional :: group_name
     integer(kind_int), intent(out) :: ierr
+#ifndef USE_REAL_CCPP
     ccpp_state%errflg = 0_kind_int
     ccpp_state%errmsg = ""
+#endif
     ierr = 0_kind_int
   end subroutine ccpp_physics_init
 
@@ -113,7 +117,12 @@ contains
   subroutine ccpp_finalize(ccpp_state, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
     integer(kind_int), intent(out) :: rc
+#ifndef USE_REAL_CCPP
     rc = 0_kind_int
+#else
+    ! In real CCPP, ccpp_t doesn't have a simple finalize routine in ccpp_types
+    rc = 0_kind_int
+#endif
   end subroutine ccpp_finalize
 
   subroutine ccpp_field_add(ccpp_state, name, var, rc)
@@ -123,6 +132,5 @@ contains
     integer(kind_int), intent(out) :: rc
     rc = 0_kind_int
   end subroutine ccpp_field_add
-#endif
 
 end module ccpp_internal_state_mod

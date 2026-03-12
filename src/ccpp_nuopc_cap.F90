@@ -9,6 +9,7 @@ module CCPP_NUOPC_Cap
   implicit none
 
   public SetServices
+  public Advertise, Realize, ModelAdvance, DataInitialize, Finalize
 
 contains
 

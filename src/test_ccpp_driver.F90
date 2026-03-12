@@ -34,14 +34,11 @@ program test_ccpp_driver
   call ESMF_GridCompSet(gcomp, clock=clock, rc=rc)
 
   ! Advertise and Realize
-  call NUOPC_CompSpecialize(gcomp, specLabel=label_Advertise, specRoutine=Advertise, rc=rc)
   call Advertise(gcomp, rc)
 
-  call NUOPC_CompSpecialize(gcomp, specLabel=label_RealizeProvided, specRoutine=Realize, rc=rc)
   call Realize(gcomp, rc)
 
   ! Run one step
-  call NUOPC_CompSpecialize(gcomp, specLabel=label_Advance, specRoutine=ModelAdvance, rc=rc)
   call ModelAdvance(gcomp, rc)
 
   if (rc == ESMF_SUCCESS) then

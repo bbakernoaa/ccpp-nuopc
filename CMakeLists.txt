@@ -119,6 +119,7 @@ endif()
 add_library(ccpp_internal_state src/ccpp_internal_state.F90)
 target_link_libraries(ccpp_internal_state PUBLIC ESMF::ESMF)
 target_include_directories(ccpp_internal_state PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+target_compile_definitions(ccpp_internal_state PUBLIC USE_REAL_CCPP)
 
 # Add CCPP data module
 add_library(ccpp_data_mod src/ccpp_data_mod.F90)
