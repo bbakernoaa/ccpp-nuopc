@@ -96,10 +96,24 @@ if(NOT CCPP_PREBUILD_RESULT EQUAL 0)
     message(FATAL_ERROR "CCPP prebuild failed")
 endif()
 
+# Build CCPP framework
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/CMakeLists.txt")
+    add_subdirectory(src/ccpp-framework)
+endif()
+
 # Include generated CMake files
 include(${CCPP_BUILDDIR}/CCPP_TYPEDEFS.cmake)
 include(${CCPP_BUILDDIR}/CCPP_SCHEMES.cmake)
 include(${CCPP_BUILDDIR}/CCPP_CAPS.cmake)
+
+# Build CCPP physics
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-physics/CMakeLists.txt")
+    # Tell ccpp-physics about the generated files
+    set(ENV{CCPP_TYPEDEFS} "${TYPEDEFS}")
+    set(ENV{CCPP_SCHEMES} "${SCHEMES}")
+    set(ENV{CCPP_CAPS} "${CAPS}")
+    add_subdirectory(src/ccpp-physics)
+endif()
 
 # Add internal state library
 add_library(ccpp_internal_state src/ccpp_internal_state.F90)
@@ -109,7 +123,12 @@ target_include_directories(ccpp_internal_state PUBLIC ${CMAKE_CURRENT_BINARY_DIR
 # Add CCPP data module
 add_library(ccpp_data_mod src/ccpp_data_mod.F90)
 target_link_libraries(ccpp_data_mod PUBLIC ccpp_internal_state)
-target_include_directories(ccpp_data_mod PUBLIC src/ccpp-framework/src) # for ccpp_types
+# Use target_link_libraries to ensure ccpp_types.mod is found if framework is built
+if (TARGET ccpp_framework)
+    target_link_libraries(ccpp_data_mod PUBLIC ccpp_framework)
+else()
+    target_include_directories(ccpp_data_mod PUBLIC src/ccpp-framework/src) # for ccpp_types.F90
+endif()
 target_compile_definitions(ccpp_data_mod PUBLIC USE_REAL_CCPP)
 
 # Add CCPP driver module
@@ -120,34 +139,28 @@ target_include_directories(ccpp_driver_mod PUBLIC ${CCPP_BUILDDIR}) # for ccpp_s
 # Add NUOPC cap library
 add_library(ccpp_nuopc_cap src/ccpp_nuopc_cap.F90 src/ccpp_inline_cdeps_mod.F90)
 target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_driver_mod ccpp_data_mod ccpp_internal_state ESMF::ESMF cdeps_share streams dshr)
+if (TARGET ccpp_framework)
+    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_framework)
+endif()
+if (TARGET ccpp_physics)
+    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_physics)
+endif()
 target_include_directories(ccpp_nuopc_cap PUBLIC ${ESMF_INCLUDE_DIRS})
 target_include_directories(ccpp_nuopc_cap PUBLIC ${cdeps_SOURCE_DIR}/share ${cdeps_SOURCE_DIR}/streams ${cdeps_SOURCE_DIR}/dshr)
 target_include_directories(ccpp_nuopc_cap PUBLIC ${cdeps_BINARY_DIR}/share ${cdeps_BINARY_DIR}/streams ${cdeps_BINARY_DIR}/dshr)
 
-# Build CCPP framework
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/CMakeLists.txt")
-    add_subdirectory(src/ccpp-framework)
-    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_framework)
-endif()
-
-# Build CCPP physics
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-physics/CMakeLists.txt")
-    # Tell ccpp-physics about the generated files
-    set(ENV{CCPP_TYPEDEFS} "${TYPEDEFS}")
-    set(ENV{CCPP_SCHEMES} "${SCHEMES}")
-    set(ENV{CCPP_CAPS} "${CAPS}")
-    add_subdirectory(src/ccpp-physics)
-    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_physics)
-endif()
-
 # Build static API
 add_library(ccpp_static_api ${CCPP_BUILDDIR}/ccpp_static_api.F90 ${CAPS})
 target_link_libraries(ccpp_static_api PUBLIC ccpp_framework ccpp_physics ccpp_data_mod)
+if (TARGET ccpp_framework)
+    target_link_libraries(ccpp_static_api PUBLIC ccpp_framework)
+endif()
 target_include_directories(ccpp_static_api PUBLIC ${CCPP_BUILDDIR})
 target_compile_definitions(ccpp_static_api PRIVATE USE_REAL_CCPP)
 
 # Link cap and driver to static API
 target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_static_api)
+target_link_libraries(ccpp_driver_mod PUBLIC ccpp_static_api)
 target_compile_definitions(ccpp_nuopc_cap PUBLIC USE_REAL_CCPP)
 target_compile_definitions(ccpp_driver_mod PUBLIC USE_REAL_CCPP)
 
