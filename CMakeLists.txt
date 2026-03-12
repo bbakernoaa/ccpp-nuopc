@@ -1,11 +1,14 @@
 cmake_minimum_required(VERSION 3.15)
 project(ccpp-nuopc LANGUAGES Fortran)
 
+# Ensure all targets are built with Position Independent Code for shared library compatibility
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Add cmake directory to module path
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Find ESMF
-find_package(ESMF REQUIRED)
+find_package(ESMF QUIET)
 
 # Discovery PIO and NetCDF from ESMF if possible
 function(find_root_by_file root_var filename)
@@ -51,7 +54,7 @@ endif()
 # Check if CDEPS is already available (e.g. via Spack)
 find_package(CDEPS QUIET)
 
-if(NOT CDEPS_FOUND)
+if(NOT CDEPS_FOUND AND ESMF_FOUND)
     message(STATUS "CDEPS not found on system, attempting to build from source...")
     set(cdeps_SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/cdeps-src")
     set(cdeps_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/cdeps-build")
@@ -81,29 +84,112 @@ if(NOT CDEPS_FOUND)
     endif()
 endif()
 
-# Add internal state library
-add_library(ccpp_internal_state src/ccpp_internal_state.F90)
-target_link_libraries(ccpp_internal_state PUBLIC ESMF::ESMF)
-target_include_directories(ccpp_internal_state PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
-
-# Add NUOPC cap library
-add_library(ccpp_nuopc_cap src/ccpp_nuopc_cap.F90 src/ccpp_inline_cdeps_mod.F90)
-target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_internal_state ESMF::ESMF cdeps_share streams dshr)
-target_include_directories(ccpp_nuopc_cap PUBLIC ${ESMF_INCLUDE_DIRS})
-target_include_directories(ccpp_nuopc_cap PUBLIC ${cdeps_SOURCE_DIR}/share ${cdeps_SOURCE_DIR}/streams ${cdeps_SOURCE_DIR}/dshr)
-# Add binary directories for generated modules
-target_include_directories(ccpp_nuopc_cap PUBLIC ${cdeps_BINARY_DIR}/share ${cdeps_BINARY_DIR}/streams ${cdeps_BINARY_DIR}/dshr)
-
-# Prepare for CCPP submodules
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/CMakeLists.txt")
-    add_subdirectory(src/ccpp-framework)
-    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_framework)
+# CCPP prebuild step
+set(CCPP_BUILDDIR "${CMAKE_CURRENT_BINARY_DIR}/ccpp")
+file(MAKE_DIRECTORY ${CCPP_BUILDDIR})
+execute_process(
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/scripts/ccpp_prebuild.py
+            --config ${CMAKE_CURRENT_SOURCE_DIR}/ccpp_prebuild_config.py
+            --suites my_physics_suite
+            --builddir ${CCPP_BUILDDIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    RESULT_VARIABLE CCPP_PREBUILD_RESULT
+)
+if(NOT CCPP_PREBUILD_RESULT EQUAL 0)
+    message(FATAL_ERROR "CCPP prebuild failed")
 endif()
 
+# Build CCPP framework
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-framework/CMakeLists.txt")
+    add_subdirectory(src/ccpp-framework)
+endif()
+
+# Include generated CMake files
+include(${CCPP_BUILDDIR}/CCPP_TYPEDEFS.cmake)
+include(${CCPP_BUILDDIR}/CCPP_SCHEMES.cmake)
+include(${CCPP_BUILDDIR}/CCPP_CAPS.cmake)
+
+# Build CCPP physics
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/ccpp-physics/CMakeLists.txt")
-    set(ENV{CCPP_TYPEDEFS} "")
-    set(ENV{CCPP_SCHEMES} "")
-    set(ENV{CCPP_CAPS} "")
+    # Tell ccpp-physics about the generated files
+    set(ENV{CCPP_TYPEDEFS} "${TYPEDEFS}")
+    set(ENV{CCPP_SCHEMES} "${SCHEMES}")
+    set(ENV{CCPP_CAPS} "${CAPS}")
     add_subdirectory(src/ccpp-physics)
-    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_physics)
+endif()
+
+# Add internal state library
+add_library(ccpp_internal_state src/ccpp_internal_state.F90)
+if (ESMF_FOUND)
+    target_link_libraries(ccpp_internal_state PUBLIC ESMF::ESMF)
+    target_compile_definitions(ccpp_internal_state PUBLIC USE_REAL_CCPP)
+endif()
+if (TARGET ccpp_framework)
+    target_link_libraries(ccpp_internal_state PUBLIC ccpp_framework)
+endif()
+target_include_directories(ccpp_internal_state PUBLIC ${CMAKE_CURRENT_BINARY_DIR})
+
+# Add CCPP data module
+add_library(ccpp_data_mod src/ccpp_data_mod.F90)
+target_link_libraries(ccpp_data_mod PUBLIC ccpp_internal_state)
+# Use target_link_libraries to ensure ccpp_types.mod is found if framework is built
+if (TARGET ccpp_framework)
+    target_link_libraries(ccpp_data_mod PUBLIC ccpp_framework)
+else()
+    target_include_directories(ccpp_data_mod PUBLIC src/ccpp-framework/src) # for ccpp_types.F90
+endif()
+if (ESMF_FOUND)
+    target_compile_definitions(ccpp_data_mod PUBLIC USE_REAL_CCPP)
+endif()
+
+# Add CCPP driver module
+add_library(ccpp_driver_mod src/ccpp_driver_mod.F90)
+target_link_libraries(ccpp_driver_mod PUBLIC ccpp_data_mod)
+if (ESMF_FOUND)
+    target_link_libraries(ccpp_driver_mod PUBLIC ESMF::ESMF)
+    target_compile_definitions(ccpp_driver_mod PUBLIC USE_REAL_CCPP)
+endif()
+target_include_directories(ccpp_driver_mod PUBLIC ${CCPP_BUILDDIR}) # for ccpp_static_api
+
+# Add NUOPC cap library
+if (ESMF_FOUND)
+    add_library(ccpp_nuopc_cap src/ccpp_nuopc_cap.F90 src/ccpp_inline_cdeps_mod.F90)
+    target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_driver_mod ccpp_data_mod ccpp_internal_state ESMF::ESMF cdeps_share streams dshr)
+    if (TARGET ccpp_framework)
+        target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_framework)
+    endif()
+    if (TARGET ccpp_physics)
+        target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_physics)
+    endif()
+    target_include_directories(ccpp_nuopc_cap PUBLIC ${ESMF_INCLUDE_DIRS})
+    target_include_directories(ccpp_nuopc_cap PUBLIC ${cdeps_SOURCE_DIR}/share ${cdeps_SOURCE_DIR}/streams ${cdeps_SOURCE_DIR}/dshr)
+    target_include_directories(ccpp_nuopc_cap PUBLIC ${cdeps_BINARY_DIR}/share ${cdeps_BINARY_DIR}/streams ${cdeps_BINARY_DIR}/dshr)
+endif()
+
+# Build static API
+add_library(ccpp_static_api ${CCPP_BUILDDIR}/ccpp_static_api.F90 ${CAPS})
+target_link_libraries(ccpp_static_api PUBLIC ccpp_framework ccpp_physics ccpp_data_mod)
+if (TARGET ccpp_framework)
+    target_link_libraries(ccpp_static_api PUBLIC ccpp_framework)
+endif()
+target_include_directories(ccpp_static_api PUBLIC ${CCPP_BUILDDIR})
+if (ESMF_FOUND)
+    target_compile_definitions(ccpp_static_api PRIVATE USE_REAL_CCPP)
+endif()
+
+# Link cap and driver to static API
+if (ESMF_FOUND)
+    if (TARGET ccpp_nuopc_cap)
+        target_link_libraries(ccpp_nuopc_cap PUBLIC ccpp_static_api)
+        target_compile_definitions(ccpp_nuopc_cap PUBLIC USE_REAL_CCPP)
+    endif()
+endif()
+target_link_libraries(ccpp_driver_mod PUBLIC ccpp_static_api)
+
+# Unit test
+add_executable(test_ccpp_driver src/test_ccpp_driver.F90)
+target_link_libraries(test_ccpp_driver ccpp_driver_mod ccpp_data_mod ccpp_internal_state ccpp_static_api)
+if (ESMF_FOUND)
+    target_link_libraries(test_ccpp_driver ccpp_nuopc_cap ESMF::ESMF)
+    target_compile_definitions(test_ccpp_driver PUBLIC USE_REAL_CCPP)
 endif()

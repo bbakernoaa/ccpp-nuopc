@@ -1,10 +1,9 @@
 [ccpp-table-properties]
-  name = ccpp_nuopc_cap
+  name = ccpp_data_mod
   type = module
-  dependencies = ccpp_data_mod.F90
 
 [ccpp-arg-table]
-  name = ccpp_nuopc_cap
+  name = ccpp_data_mod
   type = module
 [cdata]
   standard_name = ccpp_t_instance

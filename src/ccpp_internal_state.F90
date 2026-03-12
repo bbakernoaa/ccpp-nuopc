@@ -1,13 +1,28 @@
 module ccpp_internal_state_mod
+#ifdef USE_REAL_CCPP
   use ESMF
+#endif
   use, intrinsic :: iso_c_binding
+#ifdef USE_REAL_CCPP
+  use ccpp_types, only: ccpp_t
+#endif
   implicit none
+  private
+
+  public :: ccpp_internal_state_type
+  public :: kind_phys, kind_int
+  public :: ccpp_init, ccpp_finalize, ccpp_field_add
+#ifndef USE_REAL_CCPP
+  public :: ccpp_physics_init, ccpp_physics_timestep_init, &
+            ccpp_physics_run, ccpp_physics_timestep_finalize, &
+            ccpp_physics_finalize
+  public :: ccpp_t
+#endif
 
   ! Kind parameters for CCPP consistency
   integer, parameter :: kind_phys = c_double
   integer, parameter :: kind_int  = c_int
 
-  ! Preprocessor-guarded mock for standalone development/CI
 #ifndef USE_REAL_CCPP
   type ccpp_t
      integer(kind_int)    :: errflg
@@ -21,8 +36,10 @@ module ccpp_internal_state_mod
 
   type ccpp_internal_state_type
     ! ESMF-related
+#ifdef USE_REAL_CCPP
     type(ESMF_Grid) :: grid
     type(ESMF_Mesh) :: mesh
+#endif
 
     ! Data arrays (pointers to ESMF field memory)
     real(kind_phys), pointer :: temp(:,:) => null()
@@ -41,26 +58,30 @@ module ccpp_internal_state_mod
 
   end type ccpp_internal_state_type
 
-#ifndef USE_REAL_CCPP
 contains
   subroutine ccpp_init(ccpp_state, suite, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
     character(*), intent(in)    :: suite
     integer(kind_int), intent(out) :: rc
+#ifndef USE_REAL_CCPP
     ccpp_state%errflg = 0_kind_int
     ccpp_state%errmsg = ""
     ccpp_state%blk_no = 1_kind_int
     ccpp_state%thrd_no = 1_kind_int
     ccpp_state%loop_cnt = 1_kind_int
     ccpp_state%loop_max = 1_kind_int
+#endif
     rc = 0_kind_int
   end subroutine ccpp_init
 
+#ifndef USE_REAL_CCPP
   subroutine ccpp_physics_init(ccpp_state, suite_name, group_name, ierr)
     type(ccpp_t), intent(inout) :: ccpp_state
     character(*), intent(in)    :: suite_name
     character(*), intent(in), optional :: group_name
     integer(kind_int), intent(out) :: ierr
+    ccpp_state%errflg = 0_kind_int
+    ccpp_state%errmsg = ""
     ierr = 0_kind_int
   end subroutine ccpp_physics_init
 
@@ -95,6 +116,7 @@ contains
     integer(kind_int), intent(out) :: ierr
     ierr = 0_kind_int
   end subroutine ccpp_physics_finalize
+#endif
 
   subroutine ccpp_finalize(ccpp_state, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
@@ -102,7 +124,6 @@ contains
     rc = 0_kind_int
   end subroutine ccpp_finalize
 
-  ! Maintain ccpp_field_add for backward compatibility or dynamic mapping
   subroutine ccpp_field_add(ccpp_state, name, var, rc)
     type(ccpp_t), intent(inout) :: ccpp_state
     character(*), intent(in)    :: name
@@ -110,6 +131,5 @@ contains
     integer(kind_int), intent(out) :: rc
     rc = 0_kind_int
   end subroutine ccpp_field_add
-#endif
 
 end module ccpp_internal_state_mod
